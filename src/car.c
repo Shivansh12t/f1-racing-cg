@@ -11,10 +11,11 @@
 #define DEG_TO_RAD(angle) ((angle) * M_PI / 180.0f)
 
 void initCar(Car* car) {
-    car->x = 0.0f;
-    car->y = 0.25f; // Half height, sitting on y=0 plane
-    car->z = FINISH_LINE_Z - 5.0f; // Start behind the finish line
-    car->angle = 0.0f; // Facing positive Z
+    // Start on the right straight, behind the finish line
+    car->x = (INNER_X_POS + OUTER_X_POS) / 2.0f; // Center of the right road lane
+    car->y = 0.25f;
+    car->z = FINISH_LINE_Z - 20.0f; // Start further back on the straight
+    car->angle = 0.0f; // Facing positive Z (towards top of track)
     car->speed = 0.0f;
 
     car->prev_x = car->x;
@@ -24,7 +25,7 @@ void initCar(Car* car) {
     car->acceleration_rate = 7.0f;
     car->braking_rate = 12.0f;
     car->friction = 1.8f; // Slightly adjusted friction
-    car->turn_speed = 100.0f; // Slightly adjusted base turn speed
+    car->turn_speed = 120.0f; // Slightly adjusted base turn speed
     car->max_speed = 35.0f;
     car->max_reverse_speed = -8.0f;
     // Removed collision_speed_loss_factor, now we just stop.
