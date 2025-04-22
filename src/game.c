@@ -19,8 +19,7 @@ int lapStartTimeMs = 0;
 int currentLapTimeMs = 0;
 int lastLapTimeMs = 0;
 int bestLapTimeMs = INT_MAX;
-// Use int for boolean flag: 0 = false, 1 = true
-int crossedFinishLineMovingForwardState = 0; // Initialized to 0 (false)
+int crossedFinishLineMovingForwardState = 0; // 0 = false, 1 = true
 
 
 // --- Initialization Function ---
@@ -30,8 +29,10 @@ void initGame() {
     currentLapTimeMs = 0;
     lastLapTimeMs = 0;
     bestLapTimeMs = INT_MAX;
-    // Set initial state based on starting position (using int)
-    crossedFinishLineMovingForwardState = (playerCar.z >= FINISH_LINE_Z);
+    // Set initial state based on starting position (should be before line Z=0)
+    crossedFinishLineMovingForwardState = (playerCar.z >= FINISH_LINE_Z &&
+                                           playerCar.x >= FINISH_LINE_X_START &&
+                                           playerCar.x <= FINISH_LINE_X_END);
     printf("Game Initialized. Car at (%.2f, %.2f). Start time: %dms. Crossed Flag: %d\n",
            playerCar.x, playerCar.z, lapStartTimeMs, crossedFinishLineMovingForwardState);
 }
@@ -54,7 +55,7 @@ void setupCamera() {
     gluLookAt(camX, camY, camZ, lookAtX, lookAtY, lookAtZ, 0.0f, 1.0f, 0.0f);
 }
 
-// --- Fixed Timestep Update Function --- (Updated logic for int flag)
+// --- Fixed Timestep Update Function --- (Updated Lap Logic)
 void updateGame(int value) {
     (void)value; // Mark unused
 
@@ -65,44 +66,69 @@ void updateGame(int value) {
     if (timeNowMs >= lapStartTimeMs) {
         currentLapTimeMs = timeNowMs - lapStartTimeMs;
     } else {
+        // Handle potential timer wrap-around (less likely with GLUT_ELAPSED_TIME)
+        // or reset during gameplay
         lapStartTimeMs = timeNowMs;
         currentLapTimeMs = 0;
     }
 
-    // Lap Completion Logic (using int flag)
+    // --- Lap Completion Logic (Rectangular Track Update) ---
     float carZ = playerCar.z;
     float carPrevZ = playerCar.prev_z;
     float carX = playerCar.x;
-    int movingForward = (carZ > carPrevZ); // 1 if true, 0 if false
-    int withinFinishLineWidth = (fabsf(carX) < (FINISH_LINE_WIDTH / 2.0f)); // 1 if true, 0 if false
+
+    // Check 1: Is the car within the X-bounds of the finish line?
+    // Use the definitions from track.h
+    int withinFinishLineX = (carX >= FINISH_LINE_X_START && carX <= FINISH_LINE_X_END);
+
+    // Check 2: Is the car generally moving forward (positive Z direction)?
+    // Check speed directly for slightly more robustness against Z jitter
+    int movingForward = (playerCar.speed > 0.1f); // Check if speed is positive
 
     // --- Detect Crossing Finish Line FORWARD ---
-    if (carPrevZ < FINISH_LINE_Z && carZ >= FINISH_LINE_Z && movingForward && withinFinishLineWidth) {
+    // Conditions:
+    // a) Previous Z was *before* the line center (FINISH_LINE_Z).
+    // b) Current Z is *at or after* the line center.
+    // c) Car is generally moving forward.
+    // d) Car is within the correct X range for the finish line.
+    if (carPrevZ < FINISH_LINE_Z && carZ >= FINISH_LINE_Z && movingForward && withinFinishLineX) {
+        // printf("DEBUG: Crossing Fwd Detected (Z:%.2f->%.2f, X:%.2f, State:%d)\n", carPrevZ, carZ, carX, crossedFinishLineMovingForwardState); // Debug
+
         if (crossedFinishLineMovingForwardState == 1) { // Already past the line once?
             // --- LAP COMPLETED ---
             lastLapTimeMs = currentLapTimeMs;
+            // printf("DEBUG: Lap Completed! Time: %d ms\n", lastLapTimeMs); // Debug
             if (lastLapTimeMs > 0 && lastLapTimeMs < bestLapTimeMs) {
                 bestLapTimeMs = lastLapTimeMs;
+                 // printf("DEBUG: New Best Lap!\n"); // Debug
             }
-            lapStartTimeMs = timeNowMs;
+            lapStartTimeMs = timeNowMs; // Reset timer for the new lap
             currentLapTimeMs = 0;
             // crossedFinishLineMovingForwardState remains 1
+
         } else {
-            // First forward crossing. Set flag, reset timer.
+            // First forward crossing in this cycle. Set flag, reset timer to start timing.
             crossedFinishLineMovingForwardState = 1; // Set flag to true
             lapStartTimeMs = timeNowMs;
             currentLapTimeMs = 0;
+            // printf("DEBUG: First Forward Crossing - Timer Reset.\n"); // Debug
         }
     }
     // --- Detect Crossing Finish Line BACKWARD ---
-    else if (carPrevZ >= FINISH_LINE_Z && carZ < FINISH_LINE_Z && withinFinishLineWidth) {
+    // Conditions:
+    // a) Previous Z was *at or after* the line center.
+    // b) Current Z is *before* the line center.
+    // c) Car is within the correct X range for the finish line.
+    else if (carPrevZ >= FINISH_LINE_Z && carZ < FINISH_LINE_Z && withinFinishLineX) {
         // Reset the flag if crossing backward.
         crossedFinishLineMovingForwardState = 0; // Set flag to false
+        // printf("DEBUG: Crossing Backward Detected.\n"); // Debug
     }
 
     glutPostRedisplay();
     glutTimerFunc(FRAME_TIME_MS, updateGame, 0);
 }
+
 
 // --- Heads-Up Display (HUD) Rendering Function --- (No changes needed)
 void renderHUD(int windowWidth, int windowHeight) {

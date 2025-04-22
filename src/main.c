@@ -1,103 +1,139 @@
 #include <stdio.h>
 #include <GL/glew.h>
 #include <GL/freeglut.h>
-#include "game.h"
+#include "game.h"         // Includes car.h indirectly, and initGame()
 #include "track.h"
 
-// Function prototypes
+// Function prototypes for GLUT callbacks
 void display();
 void reshape(int width, int height);
-void keyboardDown(unsigned char key, int x, int y);
+void keyboardDown(unsigned char key, int x, int y); // Function to modify
 void keyboardUp(unsigned char key, int x, int y);
 void cleanup();
 
 int main(int argc, char** argv) {
-    // ... (GLUT, GLEW, OpenGL Initialization remains the same) ...
+    // Initialize GLUT
     glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
-    glutInitWindowSize(1280, 720); // Slightly wider aspect ratio common for racing
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH); // Double buffered, RGB color, Depth testing
+    glutInitWindowSize(1280, 720); // Example size
     glutInitWindowPosition(100, 100);
-    glutCreateWindow("F1 Racer Prototype - V2");
+    glutCreateWindow("F1 Racer Prototype - V_Rect"); // Updated window title slightly
 
+    // Initialize GLEW
     GLenum err = glewInit();
-    if (GLEW_OK != err) { /* report error */ return 1; }
+    if (GLEW_OK != err) {
+        fprintf(stderr, "Error: %s\n", glewGetErrorString(err));
+        return 1;
+    }
     fprintf(stdout, "Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
     fprintf(stdout, "Status: Using OpenGL %s\n", glGetString(GL_VERSION));
 
-    glEnable(GL_DEPTH_TEST);
+    // --- Basic OpenGL Setup ---
+    glEnable(GL_DEPTH_TEST); // Enable depth testing for 3D
     glDepthFunc(GL_LEQUAL);
-    glClearColor(0.1f, 0.3f, 0.7f, 1.0f);
-    glEnable(GL_CULL_FACE);
+    glClearColor(0.1f, 0.3f, 0.7f, 1.0f); // Set background color (sky blue)
+    glEnable(GL_CULL_FACE); // Optional: Improve performance by not drawing back faces
     glCullFace(GL_BACK);
-    glEnable(GL_BLEND); // Enable blending for potential future transparency
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    // Optional: Enable blending if you plan transparency later
+    // glEnable(GL_BLEND);
+    // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+    // Initialize Game State (Car position, Timers, etc.)
     initGame();
 
-    glutDisplayFunc(display);
-    glutReshapeFunc(reshape);
-    glutKeyboardFunc(keyboardDown);
-    glutKeyboardUpFunc(keyboardUp);
-    glutCloseFunc(cleanup);
+    // Register GLUT callbacks
+    glutDisplayFunc(display);         // Drawing function
+    glutReshapeFunc(reshape);         // Window resize function
+    glutKeyboardFunc(keyboardDown);   // Key press function <-- We modify this one
+    glutKeyboardUpFunc(keyboardUp);     // Key release function
+    glutCloseFunc(cleanup);           // Function called when window is closed
+
+    // Register the fixed-update timer
     glutTimerFunc(FRAME_TIME_MS, updateGame, 0);
 
+    // Enter the GLUT main event loop
     glutMainLoop();
-    return 0;
+
+    return 0; // Should not be reached
 }
 
-// Display callback
+// --- GLUT Callback Implementations ---
+
 void display() {
+    // Clear the color and depth buffers
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // --- 3D Scene Rendering ---
     glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    gluPerspective(50.0f, (float)glutGet(GLUT_WINDOW_WIDTH) / (float)glutGet(GLUT_WINDOW_HEIGHT), 0.1f, 500.0f); // Slightly wider FOV
+    glLoadIdentity(); // Reset projection matrix
+    // Set perspective projection (FOV, Aspect Ratio, Near plane, Far plane)
+    gluPerspective(50.0f, (float)glutGet(GLUT_WINDOW_WIDTH) / (float)glutGet(GLUT_WINDOW_HEIGHT), 0.1f, 500.0f);
 
     glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-    setupCamera(); // Position the camera
+    glLoadIdentity(); // Reset modelview matrix
+    setupCamera();    // Position the camera based on the car
 
-    renderTrack();      // Draw the track surface and lines
-    renderGuardrails(); // Draw the guardrails
-    renderCar(&playerCar); // Draw the car
+    // Render the track components
+    renderTrack();
+    renderGuardrails();
+
+    // Render the car
+    renderCar(&playerCar);
 
     // --- 2D HUD Rendering ---
-    renderHUD(glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT)); // Draw the HUD on top
+    renderHUD(glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT));
 
+    // Swap the front and back buffers (show the rendered frame)
     glutSwapBuffers();
 }
 
-// Reshape, keyboardDown, keyboardUp, cleanup functions remain the same
-
 void reshape(int width, int height) {
-    if (height == 0) height = 1;
+    if (height == 0) height = 1; // Prevent divide by zero
     float aspect = (float)width / (float)height;
+
+    // Set the viewport to cover the new window size
     glViewport(0, 0, width, height);
-    // Projection setup is now done primarily in display() before 3D rendering
-    // but setting it here is still good practice for initial setup.
+
+    // Set the projection matrix (redundant with display, but good practice)
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     gluPerspective(50.0f, aspect, 0.1f, 500.0f);
-    glMatrixMode(GL_MODELVIEW); // Switch back
+
+    // Switch back to modelview matrix
+    glMatrixMode(GL_MODELVIEW);
 }
 
+// MODIFIED FUNCTION
 void keyboardDown(unsigned char key, int x, int y) {
-    setCarControls(&playerCar, key, 1);
-    if (key == 27) { // ESC
-        glutLeaveMainLoop();
-    }
-     // Optional: Reset key 'r'
-    if (key == 'r' || key == 'R') {
-        printf("Resetting game state...\n");
-        initGame(); // Re-initialize car position and timers
+    // Pass regular movement key press events to the car controller
+    setCarControls(&playerCar, key, 1); // 1 means key is down
+
+    // Handle special keys: ESC to exit, R to reset
+    switch (key) {
+        case 27: // 27 is the ASCII code for ESC
+            printf("ESC pressed. Exiting.\n");
+            glutLeaveMainLoop(); // Gracefully exit the GLUT loop
+            break;
+
+        case 'r': // Lowercase 'r'
+        case 'R': // Uppercase 'R'
+            printf("'R' pressed. Resetting game state.\n");
+            initGame(); // Call the game initialization function
+            break;
+
+        // Default case is not strictly necessary here as setCarControls handles W,A,S,D
+        // default:
+        //     break;
     }
 }
+// END OF MODIFIED FUNCTION
 
 void keyboardUp(unsigned char key, int x, int y) {
-    setCarControls(&playerCar, key, 0);
+    // Pass key release events to the car controller
+    setCarControls(&playerCar, key, 0); // 0 means key is up
 }
 
 void cleanup() {
+    // Add any necessary cleanup code here (e.g., freeing memory if dynamically allocated)
     printf("Exiting application...\n");
 }
