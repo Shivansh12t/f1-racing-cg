@@ -12,7 +12,7 @@ OBJ_DIR = obj
 BIN_DIR = bin
 
 # Files
-TARGET = f1_racer.exe
+TARGET = game.exe
 SOURCES = $(wildcard $(SRC_DIR)/*.c)
 # Replace src/%.c with obj/%.o for object files
 OBJECTS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SOURCES))
@@ -47,22 +47,19 @@ directories: $(OBJ_DIR) $(BIN_DIR)
 
 $(OBJ_DIR):
 	@echo "Creating directory: $@"
-	@mkdir -p $@
+	@mkdir $@
 
 $(BIN_DIR):
 	@echo "Creating directory: $@"
-	@mkdir -p $@
+	@mkdir $@
 
 # Target to clean up generated files
 clean:
 	@echo "Cleaning up..."
-	@rm -f $(OBJ_DIR)/*.o
-	@rm -f $(EXECUTABLE)
+	@if exist $(OBJ_DIR)\*.o del /q $(OBJ_DIR)\*.o
+	@if exist $(BIN_DIR)\*.exe del /q $(BIN_DIR)\*.exe
+	@if exist $(BIN_DIR)\*.* del /q $(BIN_DIR)\*.* 2>nul
 	@echo "Cleanup complete."
-	@echo "Note: Directories $(OBJ_DIR) and $(BIN_DIR) are not removed."
-	# Optional: remove directories if empty (might need different commands depending on shell)
-	# @-rmdir $(OBJ_DIR) 2>/dev/null || :
-	# @-rmdir $(BIN_DIR) 2>/dev/null || :
 
 # Target to build and run the application
 run: all

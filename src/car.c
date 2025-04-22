@@ -43,11 +43,11 @@ void initCar(Car* car) {
     // --- Physics Parameters ---
     // These values can be tuned to change the car's handling characteristics.
     car->acceleration_rate = 7.0f;  // Units per second^2
-    car->braking_rate = 12.0f;      // Units per second^2 (force opposing motion)
+    car->braking_rate = 15.0f;      // Units per second^2 (force opposing motion)
     car->friction = 1.8f;           // Drag factor applied when not accelerating/braking
     // Adjust turning speed slightly based on track type for better feel
     car->turn_speed = (selectedTrackType == TRACK_RECT) ? 120.0f : 150.0f; // Slower turn for sharp corners
-    car->max_speed = 35.0f;         // Maximum forward speed in units per second
+    car->max_speed = 40.0f;         // Maximum forward speed in units per second
     car->max_reverse_speed = -8.0f; // Maximum reverse speed
 
     // --- Control State Initialization ---

@@ -13,31 +13,40 @@ typedef enum {
 typedef enum {
     TRACK_RECT,      // The sharp-cornered rectangle
     TRACK_ROUNDED    // The rectangle with rounded corners
+    // Add more track types here if needed
 } TrackType;
 
+// --- Menu Selection ---
+#define NUM_TRACK_OPTIONS 2 // Number of selectable tracks
 
 #define FRAME_RATE 60
 #define FRAME_TIME_MS (1000 / FRAME_RATE)
 #define FRAME_TIME_SEC (1.0f / FRAME_RATE)
 
 // --- Global Variables ---
-extern GameState currentGameState; // Current state of the game
-extern TrackType selectedTrackType; // Which track geometry to use
+extern GameState currentGameState;
+extern TrackType selectedTrackType; // Track type for the *current* race
+extern int menuSelectionIndex; // Which track is highlighted in the menu (0-based)
 extern Car playerCar;
 
-// Timer variables (using int for booleans)
+// Timer variables
 extern int lapStartTimeMs;
 extern int currentLapTimeMs;
 extern int lastLapTimeMs;
 extern int bestLapTimeMs;
-extern int crossedFinishLineMovingForwardState; // Renamed for clarity
+extern int crossedFinishLineMovingForwardState;
 
 // --- Function Declarations ---
-void initGame();          // Initializes variables for the RACING state
-void updateGame(int value); // Main update loop
-void setupCamera();       // Sets up the 3D camera
-void renderMenu(int windowWidth, int windowHeight); // Renders the start menu
-void renderHUD(int windowWidth, int windowHeight);  // Renders the racing HUD
-void startGame(TrackType type); // Transitions from MENU to RACING
+void initGame();
+void updateGame(int value);
+void setupCamera();
+void renderMenu(int windowWidth, int windowHeight);
+void renderHUD(int windowWidth, int windowHeight);
+void startGame(TrackType type);
+void handleMenuKeyPress(unsigned char key); // Specific handlers
+void handleMenuSpecialKey(int key);
+void handleRacingKeyPress(unsigned char key);
+void handleRacingSpecialKey(int key);
+
 
 #endif // GAME_H
