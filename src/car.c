@@ -1,6 +1,6 @@
 #include "car.h"      // Defines the Car struct and function prototypes
 #include "track.h"    // Defines track boundaries and isPositionOnTrack()
-#include "game.h"     // Defines selectedTrackType and TrackType enum
+#include "game.h"     // Defines selectedTrackType and TrackType enum (assuming this exists in game.h)
 
 #include <GL/glew.h>     // For OpenGL types (indirectly used via GLUT)
 #include <GL/freeglut.h> // For rendering primitives like glutSolidCube
@@ -36,6 +36,7 @@ void initCar(Car* car) {
         car->z = FINISH_LINE_Z - 20.0f; // Start back from the finish line Z coordinate
     }
 
+
     // Initialize previous position to the starting position
     car->prev_x = car->x;
     car->prev_z = car->z;
@@ -44,11 +45,10 @@ void initCar(Car* car) {
     // These values can be tuned to change the car's handling characteristics.
     car->acceleration_rate = 7.0f;  // Units per second^2
     car->braking_rate = 15.0f;      // Units per second^2 (force opposing motion)
-    car->friction = 1.8f;           // Drag factor applied when not accelerating/braking
-    // Adjust turning speed slightly based on track type for better feel
-    car->turn_speed = (selectedTrackType == TRACK_RECT) ? 120.0f : 150.0f; // Slower turn for sharp corners
+    car->friction = 2.0f;           // Drag factor applied when not accelerating/braking
+    car->turn_speed = 140.0f;       // Adjusted for sharp corners
     car->max_speed = 40.0f;         // Maximum forward speed in units per second
-    car->max_reverse_speed = -8.0f; // Maximum reverse speed
+    car->max_reverse_speed = -10.0f; // Maximum reverse speed
 
     // --- Control State Initialization ---
     // Ensure control flags start as 'off'.
@@ -57,11 +57,55 @@ void initCar(Car* car) {
     car->turning_left = 0;
     car->turning_right = 0;
 
-    // --- Dimensions for Rendering ---
-    // Used for scaling the car model.
+    // --- Dimensions for Rendering and Collision ---
+    // Used for scaling the car model and calculating corner positions.
     car->width = 1.0f;
     car->height = 0.5f;
     car->length = 2.2f;
+}
+
+
+// --- Corner Calculation Helper Function ---
+// Calculates the world X, Z coordinates of the car's four corners based on its center,
+// orientation, and dimensions. This is used for collision detection.
+void calculateCarCorners(float center_x, float center_z, float angle_deg,
+                         float width, float length,
+                         float* fl_x, float* fl_z, // Front-Left output pointers
+                         float* fr_x, float* fr_z, // Front-Right
+                         float* rl_x, float* rl_z, // Rear-Left
+                         float* rr_x, float* rr_z) // Rear-Right
+{
+    float angle_rad = DEG_TO_RAD(angle_deg); // Convert angle to radians
+    float sin_a = sinf(angle_rad);
+    float cos_a = cosf(angle_rad);
+
+    // Calculate half dimensions for convenience
+    float half_width = width / 2.0f;
+    float half_length = length / 2.0f;
+
+    // Define corner coordinates in the car's local space (relative to center, angle 0 = +Z)
+    float local_fl_x = -half_width; float local_fl_z = +half_length; // Front-Left
+    float local_fr_x = +half_width; float local_fr_z = +half_length; // Front-Right
+    float local_rl_x = -half_width; float local_rl_z = -half_length; // Rear-Left
+    float local_rr_x = +half_width; float local_rr_z = -half_length; // Rear-Right
+
+    // Apply 2D rotation and translation to find world coordinates for each corner
+    // Rotation formula: world_coord = center + R * local_coord
+    // Where R is the rotation matrix [[cos, sin], [-sin, cos]] adjusted for our angle definition (0 = +Z)
+    // World X = CenterX + LocalX * cos(angle) + LocalZ * sin(angle)
+    // World Z = CenterZ - LocalX * sin(angle) + LocalZ * cos(angle)
+
+    *fl_x = center_x + local_fl_x * cos_a + local_fl_z * sin_a;
+    *fl_z = center_z - local_fl_x * sin_a + local_fl_z * cos_a;
+
+    *fr_x = center_x + local_fr_x * cos_a + local_fr_z * sin_a;
+    *fr_z = center_z - local_fr_x * sin_a + local_fr_z * cos_a;
+
+    *rl_x = center_x + local_rl_x * cos_a + local_rl_z * sin_a;
+    *rl_z = center_z - local_rl_x * sin_a + local_rl_z * cos_a;
+
+    *rr_x = center_x + local_rr_x * cos_a + local_rr_z * sin_a;
+    *rr_z = center_z - local_rr_x * sin_a + local_rr_z * cos_a;
 }
 
 
@@ -72,82 +116,69 @@ void updateCar(Car* car, float deltaTime) {
     car->prev_x = car->x;
     car->prev_z = car->z;
 
-    // --- 1. Apply Turning ---
-    // Adjust turning rate based on speed (less turning control at high speeds).
+    // --- 1. Apply Turning --- (Code as provided by user)
     float current_turn_speed = car->turn_speed;
-    if (fabsf(car->speed) > 1.0f) { // Only adjust if moving significantly
-        // Example of speed-sensitive turning: decrease linearly above 30% max speed
+    if (fabsf(car->speed) > 1.0f) {
         float speed_factor = 1.0f - (fmaxf(0.0f, fabsf(car->speed) - car->max_speed * 0.3f) / (car->max_speed * 0.7f));
-        current_turn_speed *= fmaxf(0.15f, speed_factor); // Ensure a minimum turn rate
+        current_turn_speed *= fmaxf(0.15f, speed_factor);
     }
-
-    // Apply rotation if turning keys are pressed and the car is moving.
-    if (car->turning_left && fabsf(car->speed) > 0.1f) {
-        car->angle += current_turn_speed * deltaTime;
-    }
-    if (car->turning_right && fabsf(car->speed) > 0.1f) {
-        car->angle -= current_turn_speed * deltaTime;
-    }
-    // Keep angle within 0-360 degrees using fmodf.
+    if (car->turning_left && fabsf(car->speed) > 0.1f) car->angle += current_turn_speed * deltaTime;
+    if (car->turning_right && fabsf(car->speed) > 0.1f) car->angle -= current_turn_speed * deltaTime;
     car->angle = fmodf(car->angle + 360.0f, 360.0f);
 
-
-    // --- 2. Apply Acceleration/Braking ---
-    // Calculate the net acceleration/deceleration for this frame.
+    // --- 2. Apply Acceleration/Braking --- (Code as provided by user)
     float effective_accel = 0.0f;
-    if (car->accelerating) {
-        effective_accel = car->acceleration_rate;
-    }
+    if (car->accelerating) effective_accel = car->acceleration_rate;
     if (car->braking) {
-        // Braking force opposes the current direction of motion.
         if (car->speed > 0.01f) effective_accel -= car->braking_rate;
-        else if (car->speed < -0.01f) effective_accel += car->braking_rate; // Braking works in reverse too
+        else if (car->speed < -0.01f) effective_accel += car->braking_rate;
     }
-
-    // Update speed based on effective acceleration and time step.
     car->speed += effective_accel * deltaTime;
 
-
-    // --- 3. Apply Friction ---
-    // Apply friction only if the car is coasting (no acceleration or braking input).
+    // --- 3. Apply Friction --- (Code as provided by user)
     if (!car->accelerating && !car->braking && fabsf(car->speed) > 0.01f) {
         float friction_force = car->friction * deltaTime;
-        // Apply friction opposing the direction of motion.
         if (car->speed > 0.0f) {
-            car->speed -= friction_force;
-            if (car->speed < 0.0f) car->speed = 0.0f; // Prevent friction from reversing direction
+            car->speed -= friction_force; if (car->speed < 0.0f) car->speed = 0.0f;
         } else {
-            car->speed += friction_force;
-            if (car->speed > 0.0f) car->speed = 0.0f; // Prevent friction from reversing direction
+            car->speed += friction_force; if (car->speed > 0.0f) car->speed = 0.0f;
         }
     }
 
-
-    // --- 4. Clamp Speed ---
-    // Ensure speed stays within the defined maximum forward and reverse limits.
+    // --- 4. Clamp Speed --- (Code as provided by user)
     car->speed = fmaxf(car->max_reverse_speed, fminf(car->max_speed, car->speed));
 
-
-    // --- 5. Calculate Potential New Position ---
-    // Only calculate movement if speed is significant enough to avoid floating point issues.
+    // --- 5. Calculate Potential New Position and Check Corner Collisions ---
     if (fabsf(car->speed) > 0.001f) {
-        float angle_rad = DEG_TO_RAD(car->angle); // Convert angle to radians for trig functions
-        // Calculate change in position based on speed, angle, and time step.
+        float angle_rad = DEG_TO_RAD(car->angle);
         float dx = car->speed * sinf(angle_rad) * deltaTime;
         float dz = car->speed * cosf(angle_rad) * deltaTime;
 
-        // Determine the potential position for the next frame.
+        // Calculate potential new CENTER position
         float potential_x = car->x + dx;
         float potential_z = car->z + dz;
 
+        // Calculate potential CORNER positions based on the potential center
+        float pot_fl_x, pot_fl_z, pot_fr_x, pot_fr_z; // Front corners
+        float pot_rl_x, pot_rl_z, pot_rr_x, pot_rr_z; // Rear corners
+        calculateCarCorners(potential_x, potential_z, car->angle,
+                            car->width, car->length,
+                            &pot_fl_x, &pot_fl_z, &pot_fr_x, &pot_fr_z,
+                            &pot_rl_x, &pot_rl_z, &pot_rr_x, &pot_rr_z);
+
+        // Check if ANY potential corner is off the track
+        int collisionDetected = 0; // Use int for boolean (0 = false, 1 = true)
+        if (!isPositionOnTrack(pot_fl_x, pot_fl_z)) collisionDetected = 1;
+        if (!isPositionOnTrack(pot_fr_x, pot_fr_z)) collisionDetected = 1;
+        if (!isPositionOnTrack(pot_rl_x, pot_rl_z)) collisionDetected = 1;
+        if (!isPositionOnTrack(pot_rr_x, pot_rr_z)) collisionDetected = 1;
+
         // --- 6. Collision Detection and Response ---
-        // Check if the potential new position is on the track using the
-        // track-type-aware function from track.c.
-        if (isPositionOnTrack(potential_x, potential_z)) {
+        if (!collisionDetected) { // If collisionDetected is 0 (false)
             // Position is valid: Update the car's actual position.
             car->x = potential_x;
             car->z = potential_z;
-        } else {
+        } else { // If collisionDetected is 1 (true)
             // Collision Occurred!
             // Simple Response: Revert to the last known valid position and stop the car.
             car->x = car->prev_x;
@@ -155,7 +186,7 @@ void updateCar(Car* car, float deltaTime) {
             car->speed = 0.0f; // Bring car to a complete halt
 
             // Optional: Add sound effect or visual feedback here later.
-            // printf("Collision! Pos:(%.2f, %.2f) Speed set to 0.\n", car->x, car->z); // Debug output
+            // printf("Corner Collision! Pos:(%.2f, %.2f) Speed set to 0.\n", car->x, car->z); // Debug output
         }
     } else {
          // If speed is near zero, explicitly set it to zero to prevent potential drift.
@@ -164,7 +195,7 @@ void updateCar(Car* car, float deltaTime) {
 }
 
 
-// --- Car Rendering ---
+// --- Car Rendering --- (Code as provided by user)
 // Draws the car model (currently a composite cube structure) at its current position and orientation.
 void renderCar(const Car* car) {
     glPushMatrix(); // Save the current OpenGL matrix state
@@ -174,50 +205,40 @@ void renderCar(const Car* car) {
     glRotatef(car->angle, 0.0f, 1.0f, 0.0f); // Rotate around the Y-axis (vertical)
 
     // --- Car Body (Red) ---
-    // Scale and draw the main body cube. Encapsulate in push/pop to isolate scaling.
     glPushMatrix();
     glScalef(car->width, car->height, car->length);
     glColor3f(1.0f, 0.0f, 0.0f); // Red color
-    glutSolidCube(1.0f); // Draw a unit cube, scaled by glScalef
-    glPopMatrix(); // Restore scale after drawing body
-
-
-    // --- Wheels (Dark Grey Cubes) ---
-    // Define wheel dimensions relative to the car's base dimensions for consistency.
-    float wheelRadius = 0.35f * car->height; // Adjust for visual size
-    float wheelWidth = 0.15f * car->width;   // Adjust for visual size
-    // Calculate wheel positions relative to the car's center.
-    float wheelDistX = (car->width / 2.0f) + wheelWidth * 0.5f; // Position slightly outside the body width
-    float wheelDistZ = (car->length / 2.0f) * 0.7f; // Position along the car's length
-
-    glColor3f(0.1f, 0.1f, 0.1f); // Dark grey/black color for wheels
-
-    // Draw each wheel as a scaled cube, positioned and rotated appropriately.
-    // Front Left
-    glPushMatrix();
-    glTranslatef(-wheelDistX, 0.0f, wheelDistZ); // Position
-    glRotatef(90.0f, 0.0f, 1.0f, 0.0f); // Rotate cube to align with axle direction
-    glScalef(wheelWidth, wheelRadius * 2.0f, wheelRadius * 2.0f); // Scale cube to wheel dimensions
     glutSolidCube(1.0f);
     glPopMatrix();
 
-    // Front Right
+    // --- Wheels (Dark Grey Cubes) ---
+    float wheelRadius = 0.35f * car->height;
+    float wheelWidth = 0.15f * car->width;
+    float wheelDistX = (car->width / 2.0f) + wheelWidth * 0.5f;
+    float wheelDistZ = (car->length / 2.0f) * 0.7f;
+    glColor3f(0.1f, 0.1f, 0.1f);
+    // FL
+    glPushMatrix();
+    glTranslatef(-wheelDistX, 0.0f, wheelDistZ);
+    glRotatef(90.0f, 0.0f, 1.0f, 0.0f);
+    glScalef(wheelWidth, wheelRadius * 2.0f, wheelRadius * 2.0f);
+    glutSolidCube(1.0f);
+    glPopMatrix();
+    // FR
     glPushMatrix();
     glTranslatef(wheelDistX, 0.0f, wheelDistZ);
     glRotatef(90.0f, 0.0f, 1.0f, 0.0f);
     glScalef(wheelWidth, wheelRadius * 2.0f, wheelRadius * 2.0f);
     glutSolidCube(1.0f);
     glPopMatrix();
-
-    // Rear Left
+    // RL
     glPushMatrix();
     glTranslatef(-wheelDistX, 0.0f, -wheelDistZ);
     glRotatef(90.0f, 0.0f, 1.0f, 0.0f);
     glScalef(wheelWidth, wheelRadius * 2.0f, wheelRadius * 2.0f);
     glutSolidCube(1.0f);
     glPopMatrix();
-
-    // Rear Right
+    // RR
     glPushMatrix();
     glTranslatef(wheelDistX, 0.0f, -wheelDistZ);
     glRotatef(90.0f, 0.0f, 1.0f, 0.0f);
@@ -225,47 +246,30 @@ void renderCar(const Car* car) {
     glutSolidCube(1.0f);
     glPopMatrix();
 
-
     // --- Driver Helmet Indicator (White Cube) ---
-    // Draw a small cube to represent the driver's head area.
     glPushMatrix();
-    // Position relative to the car's center (adjust Y and Z offsets as needed).
     glTranslatef(0.0f, car->height * 0.6f, -car->length * 0.1f);
-    float helmetSize = 0.15f; // Define size for the helmet cube
-    glScalef(helmetSize, helmetSize, helmetSize); // Scale the unit cube
+    float helmetSize = 0.15f;
+    glScalef(helmetSize, helmetSize, helmetSize);
     glColor3f(1.0f, 1.0f, 1.0f); // White color
     glutSolidCube(1.0f);
     glPopMatrix();
-
 
     glPopMatrix(); // Restore the matrix state from before car transformations
 }
 
 
-// --- Car Control Input ---
+// --- Car Control Input --- (Code as provided by user)
 // Updates the car's control state flags based on keyboard input.
 void setCarControls(Car* car, int key, int state) {
-    // 'state' is 1 if the key is pressed down, 0 if released.
     switch (key) {
-        case 'w': // Forward acceleration
-        case 'W':
-            car->accelerating = state;
-            // Prevent simultaneous acceleration and braking.
-            if(state) car->braking = 0;
-            break;
-        case 's': // Braking / Reverse
-        case 'S':
-            car->braking = state;
-            // Prevent simultaneous acceleration and braking.
-             if(state) car->accelerating = 0;
-            break;
-        case 'a': // Turn Left
-        case 'A':
-            car->turning_left = state;
-            break;
-        case 'd': // Turn Right
-        case 'D':
-            car->turning_right = state;
-            break;
+        case 'w': case 'W':
+            car->accelerating = state; if(state) car->braking = 0; break;
+        case 's': case 'S':
+            car->braking = state; if(state) car->accelerating = 0; break;
+        case 'a': case 'A':
+            car->turning_left = state; break;
+        case 'd': case 'D':
+            car->turning_right = state; break;
     }
 }

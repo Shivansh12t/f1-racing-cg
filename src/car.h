@@ -5,7 +5,7 @@
 typedef struct {
     // Position
     float x;
-    float y; // Usually constant for a flat track
+    float y;
     float z;
 
     // Previous position (for collision response)
@@ -23,15 +23,14 @@ typedef struct {
     float turn_speed;
     float max_speed;
     float max_reverse_speed;
-    float collision_speed_loss_factor; // Factor to reduce speed on collision (e.g., 0.5)
 
-    // Control state
+    // Control state (using int for bool)
     int accelerating;
     int braking;
     int turning_left;
     int turning_right;
 
-    // Dimensions (for rendering)
+    // Dimensions (for rendering AND collision)
     float width;
     float height;
     float length;
@@ -43,5 +42,14 @@ void initCar(Car* car);
 void updateCar(Car* car, float deltaTime);
 void renderCar(const Car* car);
 void setCarControls(Car* car, int key, int state); // 1 for down, 0 for up
+
+// --- New Helper Function Prototype ---
+// Calculates the world X, Z coordinates of the car's four corners
+void calculateCarCorners(float center_x, float center_z, float angle_deg,
+                         float width, float length,
+                         float* fl_x, float* fl_z, // Front-Left
+                         float* fr_x, float* fr_z, // Front-Right
+                         float* rl_x, float* rl_z, // Rear-Left
+                         float* rr_x, float* rr_z); // Rear-Right
 
 #endif // CAR_H
