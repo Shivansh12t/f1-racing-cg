@@ -1,10 +1,10 @@
 #include <stdio.h>
-#include <GL/glew.h>      // Must be included before freeglut.h
+#include <GL/glew.h>
 #include <GL/freeglut.h>
-#include "game.h"         // Includes car.h indirectly
+#include "game.h"
 #include "track.h"
 
-// Function prototypes for GLUT callbacks
+// Function prototypes
 void display();
 void reshape(int width, int height);
 void keyboardDown(unsigned char key, int x, int y);
@@ -12,106 +12,92 @@ void keyboardUp(unsigned char key, int x, int y);
 void cleanup();
 
 int main(int argc, char** argv) {
-    // Initialize GLUT
+    // ... (GLUT, GLEW, OpenGL Initialization remains the same) ...
     glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH); // Double buffered, RGB color, Depth testing
-    glutInitWindowSize(1024, 768);
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
+    glutInitWindowSize(1280, 720); // Slightly wider aspect ratio common for racing
     glutInitWindowPosition(100, 100);
-    glutCreateWindow("Basic F1 Racer Prototype");
+    glutCreateWindow("F1 Racer Prototype - V2");
 
-    // Initialize GLEW
     GLenum err = glewInit();
-    if (GLEW_OK != err) {
-        fprintf(stderr, "Error: %s\n", glewGetErrorString(err));
-        return 1;
-    }
+    if (GLEW_OK != err) { /* report error */ return 1; }
     fprintf(stdout, "Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
-     fprintf(stdout, "Status: Using OpenGL %s\n", glGetString(GL_VERSION));
+    fprintf(stdout, "Status: Using OpenGL %s\n", glGetString(GL_VERSION));
 
-    // --- Basic OpenGL Setup ---
-    glEnable(GL_DEPTH_TEST); // Enable depth testing for 3D
+    glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
-    glClearColor(0.1f, 0.3f, 0.7f, 1.0f); // Set background color (sky blue)
-    glEnable(GL_CULL_FACE); // Optional: Improve performance by not drawing back faces
+    glClearColor(0.1f, 0.3f, 0.7f, 1.0f);
+    glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
+    glEnable(GL_BLEND); // Enable blending for potential future transparency
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    // Initialize Game State
     initGame();
 
-    // Register GLUT callbacks
-    glutDisplayFunc(display);         // Drawing function
-    glutReshapeFunc(reshape);         // Window resize function
-    glutKeyboardFunc(keyboardDown);   // Key press function
-    glutKeyboardUpFunc(keyboardUp);     // Key release function
-    glutCloseFunc(cleanup);           // Function called when window is closed
-
-    // Register the fixed-update timer
+    glutDisplayFunc(display);
+    glutReshapeFunc(reshape);
+    glutKeyboardFunc(keyboardDown);
+    glutKeyboardUpFunc(keyboardUp);
+    glutCloseFunc(cleanup);
     glutTimerFunc(FRAME_TIME_MS, updateGame, 0);
 
-    // Enter the GLUT main event loop
     glutMainLoop();
-
-    return 0; // Should not be reached if glutMainLoop runs indefinitely
+    return 0;
 }
 
-// --- GLUT Callback Implementations ---
-
+// Display callback
 void display() {
-    // Clear the color and depth buffers
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    // Set up the projection matrix (perspective) - usually done in reshape, but safe here too
+    // --- 3D Scene Rendering ---
     glMatrixMode(GL_PROJECTION);
-    glLoadIdentity(); // Reset projection matrix
-    gluPerspective(45.0f, (float)glutGet(GLUT_WINDOW_WIDTH) / (float)glutGet(GLUT_WINDOW_HEIGHT), 0.1f, 500.0f); // FOV, Aspect Ratio, Near plane, Far plane
+    glLoadIdentity();
+    gluPerspective(50.0f, (float)glutGet(GLUT_WINDOW_WIDTH) / (float)glutGet(GLUT_WINDOW_HEIGHT), 0.1f, 500.0f); // Slightly wider FOV
 
-    // Set up the view matrix (camera)
     glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity(); // Reset modelview matrix
-    setupCamera();    // Position the camera based on the car
+    glLoadIdentity();
+    setupCamera(); // Position the camera
 
-    // Render the track
-    renderTrack();
+    renderTrack();      // Draw the track surface and lines
+    renderGuardrails(); // Draw the guardrails
+    renderCar(&playerCar); // Draw the car
 
-    // Render the car
-    renderCar(&playerCar); // Use the global playerCar
+    // --- 2D HUD Rendering ---
+    renderHUD(glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT)); // Draw the HUD on top
 
-    // Swap the front and back buffers (show the rendered frame)
     glutSwapBuffers();
 }
 
+// Reshape, keyboardDown, keyboardUp, cleanup functions remain the same
+
 void reshape(int width, int height) {
-    if (height == 0) height = 1; // Prevent divide by zero
+    if (height == 0) height = 1;
     float aspect = (float)width / (float)height;
-
-    // Set the viewport to cover the new window size
     glViewport(0, 0, width, height);
-
-    // Set the projection matrix
+    // Projection setup is now done primarily in display() before 3D rendering
+    // but setting it here is still good practice for initial setup.
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    gluPerspective(45.0f, aspect, 0.1f, 500.0f);
-
-    // Switch back to modelview matrix
-    glMatrixMode(GL_MODELVIEW);
+    gluPerspective(50.0f, aspect, 0.1f, 500.0f);
+    glMatrixMode(GL_MODELVIEW); // Switch back
 }
 
 void keyboardDown(unsigned char key, int x, int y) {
-    // Pass key press events to the car controller
-    setCarControls(&playerCar, key, 1); // 1 means key is down
-
-    // Exit on ESC key
-    if (key == 27) { // 27 is the ASCII code for ESC
+    setCarControls(&playerCar, key, 1);
+    if (key == 27) { // ESC
         glutLeaveMainLoop();
+    }
+     // Optional: Reset key 'r'
+    if (key == 'r' || key == 'R') {
+        printf("Resetting game state...\n");
+        initGame(); // Re-initialize car position and timers
     }
 }
 
 void keyboardUp(unsigned char key, int x, int y) {
-    // Pass key release events to the car controller
-    setCarControls(&playerCar, key, 0); // 0 means key is up
+    setCarControls(&playerCar, key, 0);
 }
 
 void cleanup() {
-    // Add any necessary cleanup code here (e.g., freeing memory if dynamically allocated)
     printf("Exiting application...\n");
 }
