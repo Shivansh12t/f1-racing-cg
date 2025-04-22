@@ -1,11 +1,11 @@
 #include "game.h"
-#include "track.h"
+#include "track.h" // Includes updated track definitions
 #include <GL/glew.h>
 #include <GL/freeglut.h>
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
-#include <limits.h> // For INT_MAX
+#include <limits.h>
 
 // Define M_PI if not already defined
 #ifndef M_PI
@@ -14,31 +14,54 @@
 #define DEG_TO_RAD(angle) ((angle) * M_PI / 180.0f)
 
 // --- Global Variable Definitions ---
+GameState currentGameState = STATE_MENU; // Start in the menu
+TrackType selectedTrackType = TRACK_RECT; // Default track type
 Car playerCar;
 int lapStartTimeMs = 0;
 int currentLapTimeMs = 0;
 int lastLapTimeMs = 0;
 int bestLapTimeMs = INT_MAX;
-int crossedFinishLineMovingForwardState = 0; // 0 = false, 1 = true
+int crossedFinishLineMovingForwardState = 0;
 
-
-// --- Initialization Function ---
+// --- Initialization Function (for RACING state) ---
 void initGame() {
-    initCar(&playerCar);
+    // Initialize the car based on the *selected* track type
+    initCar(&playerCar); // initCar itself will check selectedTrackType
+
+    // Initialize lap timing variables *when racing starts*
     lapStartTimeMs = glutGet(GLUT_ELAPSED_TIME);
     currentLapTimeMs = 0;
     lastLapTimeMs = 0;
     bestLapTimeMs = INT_MAX;
-    // Set initial state based on starting position (should be before line Z=0)
+
+    // Set initial finish line state based on car start pos and selected track
+    float finishLineXStart, finishLineXEnd;
+    if (selectedTrackType == TRACK_RECT) {
+        finishLineXStart = RECT_FINISH_LINE_X_START;
+        finishLineXEnd = RECT_FINISH_LINE_X_END;
+    } else { // TRACK_ROUNDED
+        finishLineXStart = ROUND_FINISH_LINE_X_START;
+        finishLineXEnd = ROUND_FINISH_LINE_X_END;
+    }
     crossedFinishLineMovingForwardState = (playerCar.z >= FINISH_LINE_Z &&
-                                           playerCar.x >= FINISH_LINE_X_START &&
-                                           playerCar.x <= FINISH_LINE_X_END);
-    printf("Game Initialized. Car at (%.2f, %.2f). Start time: %dms. Crossed Flag: %d\n",
-           playerCar.x, playerCar.z, lapStartTimeMs, crossedFinishLineMovingForwardState);
+                                           playerCar.x >= finishLineXStart &&
+                                           playerCar.x <= finishLineXEnd);
+
+    printf("Game Initialized for Track Type %d. Start time: %dms. Crossed Flag: %d\n",
+           selectedTrackType, lapStartTimeMs, crossedFinishLineMovingForwardState);
+}
+
+// --- Function to start the game ---
+void startGame(TrackType type) {
+    printf("Starting game with Track Type %d\n", type);
+    selectedTrackType = type;
+    initGame(); // Initialize car position, timers for the selected track
+    currentGameState = STATE_RACING; // Change state to racing
 }
 
 // --- Camera Setup Function --- (No changes needed)
 void setupCamera() {
+    // ... (same as before) ...
     float followDistance = 9.0f;
     float followHeight = 4.5f;
     float lookAtHeightOffset = 1.0f;
@@ -55,85 +78,77 @@ void setupCamera() {
     gluLookAt(camX, camY, camZ, lookAtX, lookAtY, lookAtZ, 0.0f, 1.0f, 0.0f);
 }
 
-// --- Fixed Timestep Update Function --- (Updated Lap Logic)
+// --- Fixed Timestep Update Function --- (Add state check)
 void updateGame(int value) {
+    // --- Only update game logic if in RACING state ---
+    if (currentGameState != STATE_RACING) {
+        // Reschedule the timer even in menu state to keep it alive
+        glutTimerFunc(FRAME_TIME_MS, updateGame, 0);
+        // Request redraw to potentially show menu updates/animations later
+        glutPostRedisplay();
+        return; // Don't process physics, laps etc.
+    }
+    // --- End of state check ---
+
     (void)value; // Mark unused
 
     int timeNowMs = glutGet(GLUT_ELAPSED_TIME);
-    updateCar(&playerCar, FRAME_TIME_SEC);
+    updateCar(&playerCar, FRAME_TIME_SEC); // updateCar handles physics and collision
 
     // Update Lap Timers
     if (timeNowMs >= lapStartTimeMs) {
         currentLapTimeMs = timeNowMs - lapStartTimeMs;
     } else {
-        // Handle potential timer wrap-around (less likely with GLUT_ELAPSED_TIME)
-        // or reset during gameplay
         lapStartTimeMs = timeNowMs;
         currentLapTimeMs = 0;
     }
 
-    // --- Lap Completion Logic (Rectangular Track Update) ---
+    // Lap Completion Logic (Check selected track type for finish line bounds)
     float carZ = playerCar.z;
     float carPrevZ = playerCar.prev_z;
     float carX = playerCar.x;
+    int movingForward = (playerCar.speed > 0.1f);
 
-    // Check 1: Is the car within the X-bounds of the finish line?
-    // Use the definitions from track.h
-    int withinFinishLineX = (carX >= FINISH_LINE_X_START && carX <= FINISH_LINE_X_END);
+    float finishLineXStart, finishLineXEnd;
+    if (selectedTrackType == TRACK_RECT) {
+        finishLineXStart = RECT_FINISH_LINE_X_START;
+        finishLineXEnd = RECT_FINISH_LINE_X_END;
+    } else { // TRACK_ROUNDED
+        finishLineXStart = ROUND_FINISH_LINE_X_START;
+        finishLineXEnd = ROUND_FINISH_LINE_X_END;
+    }
+    int withinFinishLineX = (carX >= finishLineXStart && carX <= finishLineXEnd);
 
-    // Check 2: Is the car generally moving forward (positive Z direction)?
-    // Check speed directly for slightly more robustness against Z jitter
-    int movingForward = (playerCar.speed > 0.1f); // Check if speed is positive
 
-    // --- Detect Crossing Finish Line FORWARD ---
-    // Conditions:
-    // a) Previous Z was *before* the line center (FINISH_LINE_Z).
-    // b) Current Z is *at or after* the line center.
-    // c) Car is generally moving forward.
-    // d) Car is within the correct X range for the finish line.
+    // Detect Crossing Finish Line FORWARD
     if (carPrevZ < FINISH_LINE_Z && carZ >= FINISH_LINE_Z && movingForward && withinFinishLineX) {
-        // printf("DEBUG: Crossing Fwd Detected (Z:%.2f->%.2f, X:%.2f, State:%d)\n", carPrevZ, carZ, carX, crossedFinishLineMovingForwardState); // Debug
-
-        if (crossedFinishLineMovingForwardState == 1) { // Already past the line once?
-            // --- LAP COMPLETED ---
+        if (crossedFinishLineMovingForwardState == 1) {
             lastLapTimeMs = currentLapTimeMs;
-            // printf("DEBUG: Lap Completed! Time: %d ms\n", lastLapTimeMs); // Debug
             if (lastLapTimeMs > 0 && lastLapTimeMs < bestLapTimeMs) {
                 bestLapTimeMs = lastLapTimeMs;
-                 // printf("DEBUG: New Best Lap!\n"); // Debug
             }
-            lapStartTimeMs = timeNowMs; // Reset timer for the new lap
-            currentLapTimeMs = 0;
-            // crossedFinishLineMovingForwardState remains 1
-
-        } else {
-            // First forward crossing in this cycle. Set flag, reset timer to start timing.
-            crossedFinishLineMovingForwardState = 1; // Set flag to true
             lapStartTimeMs = timeNowMs;
             currentLapTimeMs = 0;
-            // printf("DEBUG: First Forward Crossing - Timer Reset.\n"); // Debug
+        } else {
+            crossedFinishLineMovingForwardState = 1;
+            lapStartTimeMs = timeNowMs;
+            currentLapTimeMs = 0;
         }
     }
-    // --- Detect Crossing Finish Line BACKWARD ---
-    // Conditions:
-    // a) Previous Z was *at or after* the line center.
-    // b) Current Z is *before* the line center.
-    // c) Car is within the correct X range for the finish line.
+    // Detect Crossing Finish Line BACKWARD
     else if (carPrevZ >= FINISH_LINE_Z && carZ < FINISH_LINE_Z && withinFinishLineX) {
-        // Reset the flag if crossing backward.
-        crossedFinishLineMovingForwardState = 0; // Set flag to false
-        // printf("DEBUG: Crossing Backward Detected.\n"); // Debug
+        crossedFinishLineMovingForwardState = 0;
     }
 
     glutPostRedisplay();
     glutTimerFunc(FRAME_TIME_MS, updateGame, 0);
 }
 
+// --- Menu Rendering Function ---
+void renderMenu(int windowWidth, int windowHeight) {
+    char menuText[100];
 
-// --- Heads-Up Display (HUD) Rendering Function --- (No changes needed)
-void renderHUD(int windowWidth, int windowHeight) {
-    char hudText[100];
-
+    // Switch to Ortho projection (same as HUD)
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
     glLoadIdentity();
@@ -143,62 +158,91 @@ void renderHUD(int windowWidth, int windowHeight) {
     glPushMatrix();
     glLoadIdentity();
 
+    // Disable 3D effects
     glPushAttrib(GL_DEPTH_BUFFER_BIT | GL_LIGHTING_BIT | GL_TEXTURE_BIT | GL_FOG_BIT);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_LIGHTING);
     glDisable(GL_TEXTURE_2D);
     glDisable(GL_FOG);
 
-    glColor3f(1.0f, 1.0f, 1.0f);
+    // Set text color
+    glColor3f(1.0f, 1.0f, 0.0f); // Yellow text for menu
 
-    int textX = 10;
-    int textY = windowHeight - 30;
-    int lineHeight = 20;
+    // --- Render Menu Text ---
+    int textX = windowWidth / 2 - 150; // Center text roughly
+    int textY = windowHeight / 2 + 50;
+    int lineHeight = 24;
 
-    // Current Lap Time
-    int cur_mins = (currentLapTimeMs / 1000) / 60;
-    int cur_secs = (currentLapTimeMs / 1000) % 60;
-    int cur_ms = currentLapTimeMs % 1000;
-    snprintf(hudText, sizeof(hudText), "Current: %02d:%02d.%03d", cur_mins, cur_secs, cur_ms);
+    snprintf(menuText, sizeof(menuText), "F1 RACER PROTOTYPE");
     glRasterPos2i(textX, textY);
-    for (char* c = hudText; *c != '\0'; c++) {
+    for (char* c = menuText; *c != '\0'; c++) {
+        glutBitmapCharacter(GLUT_BITMAP_TIMES_ROMAN_24, *c); // Bigger font
+    }
+    textY -= lineHeight * 2; // Extra space
+
+    glColor3f(1.0f, 1.0f, 1.0f); // White text for options
+
+    snprintf(menuText, sizeof(menuText), "Select Track:");
+    glRasterPos2i(textX, textY);
+     for (char* c = menuText; *c != '\0'; c++) {
         glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, *c);
     }
     textY -= lineHeight;
 
-    // Last Lap Time
-    if (lastLapTimeMs > 0) {
-        int last_mins = (lastLapTimeMs / 1000) / 60;
-        int last_secs = (lastLapTimeMs / 1000) % 60;
-        int last_ms = lastLapTimeMs % 1000;
-        snprintf(hudText, sizeof(hudText), "Last:    %02d:%02d.%03d", last_mins, last_secs, last_ms);
-    } else {
-        snprintf(hudText, sizeof(hudText), "Last:    --:--.---");
-    }
-    glRasterPos2i(textX, textY);
-    for (char* c = hudText; *c != '\0'; c++) {
+    snprintf(menuText, sizeof(menuText), "1: Rectangular Circuit");
+    glRasterPos2i(textX + 20, textY); // Indent options
+     for (char* c = menuText; *c != '\0'; c++) {
         glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, *c);
     }
     textY -= lineHeight;
 
-    // Best Lap Time
-    if (bestLapTimeMs != INT_MAX) {
-        int best_mins = (bestLapTimeMs / 1000) / 60;
-        int best_secs = (bestLapTimeMs / 1000) % 60;
-        int best_ms = bestLapTimeMs % 1000;
-        snprintf(hudText, sizeof(hudText), "Best:    %02d:%02d.%03d", best_mins, best_secs, best_ms);
-    } else {
-        snprintf(hudText, sizeof(hudText), "Best:    --:--.---");
+    snprintf(menuText, sizeof(menuText), "2: Rounded Circuit");
+     glRasterPos2i(textX + 20, textY); // Indent options
+     for (char* c = menuText; *c != '\0'; c++) {
+        glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, *c);
     }
-    glRasterPos2i(textX, textY);
-     for (char* c = hudText; *c != '\0'; c++) {
+    textY -= lineHeight * 2;
+
+    snprintf(menuText, sizeof(menuText), "ESC to Exit");
+     glRasterPos2i(textX, textY);
+     for (char* c = menuText; *c != '\0'; c++) {
         glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, *c);
     }
 
+    // Restore OpenGL States
     glPopAttrib();
 
+    // Restore Matrices
     glMatrixMode(GL_PROJECTION);
     glPopMatrix();
     glMatrixMode(GL_MODELVIEW);
     glPopMatrix();
+}
+
+
+// --- Heads-Up Display (HUD) Rendering Function --- (No changes needed)
+void renderHUD(int windowWidth, int windowHeight) {
+    // ... (same as before) ...
+    char hudText[100];
+
+    glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity();
+    gluOrtho2D(0, windowWidth, 0, windowHeight);
+    glMatrixMode(GL_MODELVIEW); glPushMatrix(); glLoadIdentity();
+    glPushAttrib(GL_DEPTH_BUFFER_BIT | GL_LIGHTING_BIT | GL_TEXTURE_BIT | GL_FOG_BIT);
+    glDisable(GL_DEPTH_TEST); glDisable(GL_LIGHTING); glDisable(GL_TEXTURE_2D); glDisable(GL_FOG);
+    glColor3f(1.0f, 1.0f, 1.0f);
+    int textX = 10; int textY = windowHeight - 30; int lineHeight = 20;
+
+    int cur_mins=(currentLapTimeMs/1000)/60; int cur_secs=(currentLapTimeMs/1000)%60; int cur_ms=currentLapTimeMs%1000;
+    snprintf(hudText, sizeof(hudText), "Current: %02d:%02d.%03d", cur_mins, cur_secs, cur_ms);
+    glRasterPos2i(textX, textY); for (char* c = hudText; *c != '\0'; c++) { glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, *c); } textY -= lineHeight;
+
+    if (lastLapTimeMs > 0) { int last_mins=(lastLapTimeMs/1000)/60; int last_secs=(lastLapTimeMs/1000)%60; int last_ms=lastLapTimeMs%1000; snprintf(hudText, sizeof(hudText), "Last:    %02d:%02d.%03d", last_mins, last_secs, last_ms); } else { snprintf(hudText, sizeof(hudText), "Last:    --:--.---"); }
+    glRasterPos2i(textX, textY); for (char* c = hudText; *c != '\0'; c++) { glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, *c); } textY -= lineHeight;
+
+    if (bestLapTimeMs != INT_MAX) { int best_mins=(bestLapTimeMs/1000)/60; int best_secs=(bestLapTimeMs/1000)%60; int best_ms=bestLapTimeMs%1000; snprintf(hudText, sizeof(hudText), "Best:    %02d:%02d.%03d", best_mins, best_secs, best_ms); } else { snprintf(hudText, sizeof(hudText), "Best:    --:--.---"); }
+    glRasterPos2i(textX, textY); for (char* c = hudText; *c != '\0'; c++) { glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, *c); }
+
+    glPopAttrib();
+    glMatrixMode(GL_PROJECTION); glPopMatrix(); glMatrixMode(GL_MODELVIEW); glPopMatrix();
 }
