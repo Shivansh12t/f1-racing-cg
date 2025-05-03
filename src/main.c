@@ -13,7 +13,7 @@ void display();                          // Main drawing function
 void reshape(int width, int height);     // Window resize handler
 void keyboardDown(unsigned char key, int x, int y); // Regular key press handler
 void keyboardUp(unsigned char key, int x, int y);   // Regular key release handler
-void specialKeyDown(int key, int x, int y); // Special key press handler (arrows, etc.)
+void specialKeyDown(int key, int x, int y); // Special Key Presses for the menu
 // void specialKeyUp(int key, int x, int y); // Optional: Special key release handler (not needed currently)
 void cleanup();                          // Function called when the GLUT window is closed
 
@@ -173,5 +173,4 @@ void specialKeyDown(int key, int x, int y) {
 // Cleanup Function
 void cleanup() {
     printf("Exiting application...\n");
-    // Add any resource freeing code here if necessary in the future
 }
