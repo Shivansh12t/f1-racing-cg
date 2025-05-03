@@ -1,6 +1,7 @@
 #include "car.h"      // Defines the Car struct and function prototypes
-#include "track.h"    // Defines track boundaries and isPositionOnTrack()
-#include "game.h"     // Defines selectedTrackType and TrackType enum (assuming this exists in game.h)
+#include "track_rect.h"  // Defines rectangle track boundaries
+#include "track_round.h" // Defines rounded track boundaries
+#include "game.h"     // Defines selectedTrackType and TrackType enum
 
 #include <GL/glew.h>     // For OpenGL types (indirectly used via GLUT)
 #include <GL/freeglut.h> // For rendering primitives like glutSolidCube
@@ -14,6 +15,8 @@
 // Macro for converting degrees to radians
 #define DEG_TO_RAD(angle) ((angle) * M_PI / 180.0f)
 
+// Forward declaration of our position on track function
+int isPositionOnTrack(float x, float z);
 
 // --- Car Initialization ---
 // Sets the initial state of the car based on the selected track.
@@ -191,6 +194,17 @@ void updateCar(Car* car, float deltaTime) {
     } else {
          // If speed is near zero, explicitly set it to zero to prevent potential drift.
          car->speed = 0.0f;
+    }
+}
+
+
+// --- Position on Track Check ---
+// Wraps the specific track type functions to determine if position is on track
+int isPositionOnTrack(float x, float z) {
+    if (selectedTrackType == TRACK_RECT) {
+        return isPositionOnRectTrack(x, z);
+    } else { // TRACK_ROUNDED
+        return isPositionOnRoundTrack(x, z);
     }
 }
 

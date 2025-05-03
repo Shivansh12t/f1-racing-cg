@@ -47,6 +47,7 @@ void initGame();                           // Initializes car/timers for the sel
 void updateGame(int value);                // Main game loop update function (timer callback)
 void setupCamera();                        // Configures the third-person camera view
 void startGame(TrackType type);            // Transitions from menu to racing state with chosen track
+void switchTrack(TrackType newType);       // Function to change track
 
 // Rendering functions
 void renderMenu(int windowWidth, int windowHeight); // Draws the track selection menu

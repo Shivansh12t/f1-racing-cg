@@ -28,6 +28,11 @@ int lastLapTimeMs = 0;                   // Milliseconds duration of the previou
 int bestLapTimeMs = INT_MAX;             // Milliseconds duration of the fastest completed lap
 int crossedFinishLineMovingForwardState = 0; // Boolean flag (0=false, 1=true) for lap detection
 
+// --- Function to switch track ---
+void switchTrack(TrackType newType) {
+    selectedTrackType = newType;
+    // Other track-related setup if needed
+}
 
 // --- Initialization Function (for RACING state) ---
 // Called by startGame() or when 'R' is pressed during racing.
