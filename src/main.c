@@ -24,7 +24,7 @@ int main(int argc, char** argv) {
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH); // Double buffered, RGB color, Depth buffer
     glutInitWindowSize(1280, 720);
     glutInitWindowPosition(100, 100);
-    glutCreateWindow("F1 Racer");
+    glutCreateWindow("F1 Racing Simulator");
 
     // 2. Initialize GLEW
     GLenum err = glewInit();
