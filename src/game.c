@@ -1,25 +1,27 @@
 #include "game.h"       // Defines GameState, TrackType, Car, globals, function prototypes
+#include <GL/glew.h>
+#include <GL/freeglut.h>
+#include <stdio.h>
+#include <string.h>
+#include <math.h>
+#include <limits.h>
+
 // Include BOTH track headers - the code uses constants/functions from one based on selectedTrackType
 #include "track_rect.h"
 #include "track_round.h"
-#include <GL/glew.h>    // For OpenGL types if needed (used by GLUT)
-#include <GL/freeglut.h> // For rendering text, getting time, etc.
-#include <stdio.h>      // For snprintf, printf (debugging)
-#include <string.h>     // For strlen (used implicitly by snprintf etc.)
-#include <math.h>       // For fabsf, fmaxf, fminf, sinf, cosf etc.
-#include <limits.h>     // For INT_MAX (initial best lap time)
 
 // Define M_PI if not already defined by math.h
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
+
 // Macro for converting degrees to radians
 #define DEG_TO_RAD(angle) ((angle) * M_PI / 180.0f)
 
 // --- Global Variable Definitions ---
 // Declared 'extern' in game.h, defined here with initial values.
 GameState currentGameState = STATE_MENU;     // Start the game in the menu state
-TrackType selectedTrackType = TRACK_ROUNDED; // Default track type for internal logic (will be overwritten by menu)
+TrackType selectedTrackType = TRACK_RECT; // Default track type for internal logic (will be overwritten by menu)
 int menuSelectionIndex = 0;              // Index of the currently highlighted menu option (0-based)
 Car playerCar;                           // The player's car object
 int lapStartTimeMs = 0;                  // Milliseconds timestamp when the current lap started
@@ -31,7 +33,6 @@ int crossedFinishLineMovingForwardState = 0; // Boolean flag (0=false, 1=true) f
 // --- Function to switch track ---
 void switchTrack(TrackType newType) {
     selectedTrackType = newType;
-    // Other track-related setup if needed
 }
 
 // --- Initialization Function (for RACING state) ---

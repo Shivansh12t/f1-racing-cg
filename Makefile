@@ -29,7 +29,6 @@ EXECUTABLE = $(BIN_DIR)/$(TARGET)
 all: directories $(EXECUTABLE)
 	@echo "Build successful!"
 	@echo "Executable: $(EXECUTABLE)"
-	@echo "Remember to copy freeglut.dll and glew32.dll to the $(BIN_DIR) directory."
 
 # Rule to create the executable by linking object files
 $(EXECUTABLE): $(OBJECTS)

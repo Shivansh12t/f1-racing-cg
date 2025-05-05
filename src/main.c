@@ -1,8 +1,8 @@
-#include <stdio.h>       // Standard Input/Output functions (printf)
-#include <GL/glew.h>     // OpenGL Extension Wrangler Library (must be included before freeglut)
-#include <GL/freeglut.h> // FreeGLUT library for windowing, input, and basic shapes
+#include <stdio.h>
+#include <GL/glew.h>
+#include <GL/freeglut.h>
 
-#include "game.h"       // Includes GameState, TrackType, global variables, core functions
+#include "game.h"
 // Include BOTH track headers for rendering functions
 #include "track_rect.h"
 #include "track_round.h"
@@ -20,11 +20,11 @@ void cleanup();                          // Function called when the GLUT window
 // --- Main Application Entry Point ---
 int main(int argc, char** argv) {
     // 1. Initialize GLUT
-    glutInit(&argc, argv); // Initialize the GLUT library
+    glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH); // Double buffered, RGB color, Depth buffer
-    glutInitWindowSize(1280, 720);     // Set initial window dimensions
-    glutInitWindowPosition(100, 100);  // Set initial window position
-    glutCreateWindow("F1 Racer Prototype - Menu"); // Create window with title
+    glutInitWindowSize(1280, 720);
+    glutInitWindowPosition(100, 100);
+    glutCreateWindow("F1 Racer");
 
     // 2. Initialize GLEW
     GLenum err = glewInit();
@@ -39,7 +39,10 @@ int main(int argc, char** argv) {
     // 3. Basic OpenGL Setup
     glEnable(GL_DEPTH_TEST); // Enable depth testing
     glDepthFunc(GL_LEQUAL);  // Pixels with equal or lesser depth pass
-    glClearColor(0.1f, 0.3f, 0.7f, 1.0f); // Background clear color (sky blue)
+    glClearColor(0.1f, 0.3f, 0.7f, 1.0f); // bg color : sky blue
+    // glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // bg color : black
+
+    // Polygons facing away form the camera will not be rendered - improving performance
     glEnable(GL_CULL_FACE); // Enable face culling
     glCullFace(GL_BACK);    // Cull back-facing polygons
 
@@ -50,19 +53,19 @@ int main(int argc, char** argv) {
 
 
     // 5. Register GLUT Callback Functions
-    glutDisplayFunc(display);           // Main drawing function
-    glutReshapeFunc(reshape);           // Window resize handler
+    glutDisplayFunc(display);
+    glutReshapeFunc(reshape);
     glutKeyboardFunc(keyboardDown);     // Regular key press handler
-    glutKeyboardUpFunc(keyboardUp);       // Regular key release handler
+    glutKeyboardUpFunc(keyboardUp);     // Regular key release handler
     glutSpecialFunc(specialKeyDown);    // Special key press handler
-    glutCloseFunc(cleanup);             // Window close handler
+    glutCloseFunc(cleanup);
 
 
     // 6. Register the Fixed-Update Timer
     glutTimerFunc(FRAME_TIME_MS, updateGame, 0);
 
 
-    // 7. Print Controls and Enter GLUT Main Loop
+    // 7. Print Controls in Menu & Enter Main Loop
      printf("\n--- CONTROLS ---\n");
      printf(" Menu:\n");
      printf("   UP/DOWN Arrows: Select Track\n");
